@@ -210,11 +210,17 @@ fn modified_within(path: &Path, max_age: Duration) -> bool {
         .unwrap_or(false)
 }
 
+/// How far back to scan. Kept in one place so the report and the series builder cannot
+/// disagree about which files are in scope.
+pub fn max_age() -> Duration {
+    let days = crate::settings::load().history_days.max(1) as u64;
+    Duration::from_secs(days * 24 * 3600)
+}
+
 pub fn scan() -> UsageReport {
     let mut report = UsageReport::default();
     let mut per_model: HashMap<String, ModelUsage> = HashMap::new();
-    // 30 days keeps the walk bounded; older sessions can't be in a live session/weekly window.
-    let max_age = Duration::from_secs(30 * 24 * 3600);
+    let max_age = max_age();
 
     for (label, root) in config_roots() {
         report.roots.push(label);
@@ -324,7 +330,7 @@ mod tests {
 /// Every jsonl under every Claude root, for callers that need the raw files.
 pub fn all_usage_files() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
-    let max_age = Duration::from_secs(30 * 24 * 3600);
+    let max_age = max_age();
     for (_label, root) in config_roots() {
         let mut files = Vec::new();
         jsonl_files(&root.join("projects"), &mut files, 0);

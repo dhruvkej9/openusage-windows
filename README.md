@@ -48,6 +48,10 @@ cd src-tauri && cargo test
 
 ## Deviations from upstream, and why
 
+- **API keys live in a JSON file, not the Keychain.** On macOS upstream uses the Keychain; the
+  Windows equivalent is DPAPI, which ties the file to one Windows user and would break the
+  portable build. A permission-locked file is the honest middle ground.
+
 - **Pricing is local, not downloaded.** Upstream fetches a pricing catalog; the rates here
   (opus 15/75, sonnet 3/15, haiku 1/5 per million; cache read 0.1x input, cache write 1.25x)
   are compiled in, so the app works offline. Unknown models price as sonnet rather than opus.
@@ -56,6 +60,23 @@ cd src-tauri && cargo test
 - **Only the Claude Code provider.** The other ten need their own credential and API paths;
   the scanner is a module, so each is an added file.
 - **No updater.** Upstream uses Sparkle; Windows builds would use WinGet or an in-app check.
+
+## Screens
+
+| Tab | What it does |
+|---|---|
+| **Dashboard** | Totals, per-model bars, rate limits, accounts, config roots — every block individually hideable |
+| **Trend** | 30-day sparkline, per-model sparklines, a day-by-day list |
+| **Customize** | Reorder widgets, reorder providers, set the history window (7d–1y), set the poll interval |
+| **API Keys** | Store a key per tool; saved values are shown masked and an empty value clears one |
+| **Settings** | Rate-limit detail, data sources, about |
+
+**Share card** renders a 1200x630 PNG of the headline numbers locally — Rust builds the SVG, the
+webview rasterises it to a canvas. Nothing is uploaded.
+
+Settings persist to `%APPDATA%\OpenUsage\settings.json`. On Windows the file gets an owner-only
+ACL (`icacls /inheritance:r`) because it holds tool API keys. Those keys are read only to call
+that tool's own endpoint — OpenUsage never transmits them.
 
 ## Providers
 

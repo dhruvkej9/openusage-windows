@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use openusage_lib::{accounts, claude, series};
+use openusage_lib::{accounts, claude, series, settings, share};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
@@ -18,6 +18,31 @@ fn get_accounts() -> Vec<accounts::AccountInfo> {
 #[tauri::command]
 fn get_claude_accounts() -> Vec<accounts::AccountInfo> {
     accounts::claude_accounts()
+}
+
+#[tauri::command]
+fn get_share_card() -> String {
+    share::svg(&claude::scan(), &series::build(&claude::all_usage_files()))
+}
+
+#[tauri::command]
+fn get_settings() -> settings::Settings {
+    settings::load()
+}
+
+#[tauri::command]
+fn get_widgets() -> Vec<settings::WidgetDef> {
+    settings::WIDGETS.iter().map(|(id, label)| settings::WidgetDef { id: (*id).into(), label: (*label).into() }).collect()
+}
+
+#[tauri::command]
+fn get_masked_keys() -> Vec<settings::MaskedKey> {
+    settings::masked_keys()
+}
+
+#[tauri::command]
+fn update_settings(patch: serde_json::Value) -> Result<settings::Settings, String> {
+    settings::update(patch)
 }
 
 #[tauri::command]
@@ -55,7 +80,7 @@ fn tooltip(report: &claude::UsageReport) -> String {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_usage, get_roots, get_accounts, get_claude_accounts, get_series])
+        .invoke_handler(tauri::generate_handler![get_usage, get_roots, get_accounts, get_claude_accounts, get_series, get_settings, get_widgets, get_masked_keys, update_settings, get_share_card])
         .setup(|app| {
             let handle = app.handle().clone();
 

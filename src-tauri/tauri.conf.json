@@ -11,8 +11,8 @@
       {
         "label": "main",
         "title": "OpenUsage",
-        "width": 400,
-        "height": 640,
+        "width": 430,
+        "height": 700,
         "resizable": false,
         "decorations": false,
         "transparent": true,
@@ -21,11 +21,18 @@
         "center": true
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.png", "icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
   }
 }

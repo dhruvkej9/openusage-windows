@@ -94,6 +94,43 @@
   .empty { color: var(--muted); text-align: center; padding: 30px 16px; }
   .empty code { font-size: 11px; }
 
+  .tbtn {
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 8px 13px; font-size: 12.5px; cursor: pointer; font-family: inherit;
+  }
+  .tbtn:hover { border-color: var(--accent); }
+  .tbtn.primary { background: var(--accent); color: #14100a; border-color: var(--accent); font-weight: 600; }
+  .tbtn:disabled { opacity: .5; cursor: default; }
+  .row-btns { display: flex; gap: 8px; margin-top: 10px; }
+
+  .wlist { display: flex; flex-direction: column; gap: 1px; }
+  .wrow {
+    display: flex; align-items: center; gap: 9px; padding: 9px 4px;
+    border-bottom: 1px solid rgba(43,48,56,.5);
+  }
+  .wrow:last-child { border-bottom: 0; }
+  .wrow .nm { flex: 1 1 auto; font-size: 12.5px; }
+  .ord { display: flex; flex-direction: column; gap: 1px; }
+  .ord button {
+    width: 22px; height: 15px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--muted); border-radius: 4px; cursor: pointer; font-size: 9px; line-height: 1;
+  }
+  .ord button:hover { color: var(--accent); border-color: var(--accent); }
+
+  .keyrow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(43,48,56,.5); }
+  .keyrow:last-child { border-bottom: 0; }
+  .keyrow .p { flex: 0 0 92px; font-size: 12px; }
+  .keyrow input {
+    flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 7px; padding: 6px 9px; font-size: 12px; font-family: ui-monospace, Menlo, monospace;
+  }
+  .keyrow input:focus { outline: none; border-color: var(--accent); }
+  .keyrow .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 4px; }
+  .keyrow .x:hover { color: var(--bad); }
+
+  #cardPreview { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0b0d10; }
+  #cardPreview img { display: block; width: 100%; height: auto; }
+
   .set { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(43,48,56,.55); }
   .set:last-child { border-bottom: 0; }
   .set .lbl b { display: block; font-size: 12.5px; font-weight: 560; }
@@ -120,6 +157,9 @@
     <button data-tab="dash" class="on">Dashboard</button>
     <button data-tab="trend">Trend</button>
     <button data-tab="settings">Settings</button>
+    <button data-tab="customize">Customize</button>
+    <button data-tab="keys">API Keys</button>
+    <button data-tab="share">Share</button>
   </nav>
 
   <div id="scroll"><div class="empty">Scanning Claude Code sessions&hellip;</div></div>
@@ -191,16 +231,177 @@ function accountsSection(list) {
   }).join('');
 }
 
+
+let SETTINGS = null, WIDGETS = [], HIDDEN = new Set(), MASKED = [];
+const shown = id => !HIDDEN.has(id);
+
+async function loadSettings() {
+  const invoke = window.__TAURI__?.core?.invoke;
+  SETTINGS = await invoke('get_settings').catch(() => null);
+  WIDGETS = await invoke('get_widgets').catch(() => []);
+  MASKED = await invoke('get_masked_keys').catch(() => []);
+  HIDDEN = new Set(SETTINGS?.hiddenWidgets || []);
+}
+
+async function patch(obj) {
+  const invoke = window.__TAURI__?.core?.invoke;
+  await invoke('update_settings', { patch: obj }).catch(e => alert(String(e)));
+  await loadSettings();
+  render();
+}
+
+function moveWidget(id, dir) {
+  const order = WIDGETS.map(w => w.id);
+  const i = order.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  patch({ providerOrder: order });
+}
+
+function moveProvider(p, dir) {
+  const order = [...(SETTINGS?.providerOrder || [])];
+  const i = order.indexOf(p);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  patch({ providerOrder: order });
+}
+
+function toggleWidget(id) {
+  const h = new Set(HIDDEN);
+  h.has(id) ? h.delete(id) : h.add(id);
+  HIDDEN = h;
+  patch({ hiddenWidgets: [...h] });
+}
+
+function widgetRow(w, i) {
+  return '<div class="wrow"><div class="ord">'
+    + '<button onclick="moveWidget(\'' + w.id + '\',-1)">&#9650;</button>'
+    + '<button onclick="moveWidget(\'' + w.id + '\',1)">&#9660;</button></div>'
+    + '<span class="nm">' + w.label + '</span>'
+    + '<input type="checkbox" ' + (shown(w.id) ? 'checked' : '')
+    + ' onclick="toggleWidget(\'' + w.id + '\')"></div>';
+}
+
+function providerRow(p, i, n) {
+  const known = ['claude','opencode','cursor','codex','copilot','openrouter','zai','grok','devin','pi','ollama'];
+  return '<div class="wrow"><div class="ord">'
+    + '<button ' + (i === 0 ? 'disabled' : '') + ' onclick="moveProvider(\'' + p + '\',-1)">&#9650;</button>'
+    + '<button ' + (i === n - 1 ? 'disabled' : '') + ' onclick="moveProvider(\'' + p + '\',1)">&#9660;</button></div>'
+    + '<span class="nm">' + p + '</span></div>';
+}
+
+const KEY_TOOLS = ['openrouter','zai','opencode','copilot','cursor','grok','devin'];
+
+function keyRow(tool, maskedVal) {
+  return '<div class="keyrow"><span class="p">' + tool + '</span>'
+    + '<input id="key_' + tool + '" type="password" placeholder="' + (maskedVal || 'not set') + '" value="">'
+    + '<button class="tbtn" onclick="saveKey(\'' + tool + '\')">Save</button>'
+    + '<button class="x" onclick="clearKey(\'' + tool + '\')">&times;</button></div>';
+}
+
+async function saveKey(tool) {
+  const v = document.getElementById('key_' + tool).value.trim();
+  await patch({ apiKeys: { [tool]: v } });
+}
+
+async function clearKey(tool) {
+  await patch({ apiKeys: { [tool]: null } });
+}
+
+async function downloadCard() {
+  const invoke = window.__TAURI__?.core?.invoke;
+  const svgText = await invoke('get_share_card');
+  const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 630;
+    const ctx = c.getContext('2d');
+    // The card is drawn with a gradient; fill the background so the PNG is not transparent.
+    ctx.fillStyle = '#0b0d10';
+    ctx.fillRect(0, 0, 1200, 630);
+    ctx.drawImage(img, 0, 0, 1200, 630);
+    URL.revokeObjectURL(url);
+    c.toBlob(b => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = 'openusage-' + new Date().toISOString().slice(0, 10) + '.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/png');
+  };
+  img.src = url;
+}
+
 async function render() {
   const invoke = window.__TAURI__?.core?.invoke;
   if (!invoke) { $('scroll').innerHTML = '<div class="empty">Tauri runtime not available.</div>'; return; }
 
+  await loadSettings();
   const [r, series, accounts] = await Promise.all([
     invoke('get_usage'),
     invoke('get_series').catch(() => null),
     invoke('get_accounts').catch(() => []),
   ]);
   const models = r.models || [];
+
+
+  if (TAB === 'customize') {
+    const n = (SETTINGS?.providerOrder || []).length;
+    $('scroll').innerHTML =
+      '<section><h2>Dashboard widgets</h2><div class="wlist">'
+      + WIDGETS.map((w, i) => widgetRow(w, i)).join('') + '</div></section>'
+      + '<section><h2>Provider order</h2><div class="wlist">'
+      + (SETTINGS?.providerOrder || []).map((p, i) => providerRow(p, i, n)).join('')
+      + '</div></section>'
+      + '<section><h2>History window</h2>'
+      + '<div class="set"><div class="lbl"><b>Days of history</b><i>affects totals and the trend</i></div>'
+      + '<span class="val">' + (SETTINGS?.historyDays ?? 30) + 'd</span></div>'
+      + '<div class="row-btns">'
+      + '<button class="tbtn" onclick="patch({historyDays: 7})">7d</button>'
+      + '<button class="tbtn" onclick="patch({historyDays: 30})">30d</button>'
+      + '<button class="tbtn" onclick="patch({historyDays: 90})">90d</button>'
+      + '<button class="tbtn" onclick="patch({historyDays: 365})">1y</button>'
+      + '</div></section>'
+      + '<section><h2>Refresh</h2>'
+      + '<div class="set"><div class="lbl"><b>Poll interval</b><i>tray tooltip + popover</i></div>'
+      + '<span class="val">' + (SETTINGS?.pollSeconds ?? 60) + 's</span></div>'
+      + '<div class="row-btns"><button class="tbtn" onclick="patch({pollSeconds: 30})">30s</button>'
+      + '<button class="tbtn" onclick="patch({pollSeconds: 60})">60s</button>'
+      + '<button class="tbtn" onclick="patch({pollSeconds: 300})">5m</button></div></section>';
+    $('foot').textContent = 'customize';
+    return;
+  }
+
+  if (TAB === 'keys') {
+    const known = new Set(MASKED.map(m => m.provider));
+    $('scroll').innerHTML =
+      '<section><h2>Tool API keys</h2>'
+      + KEY_TOOLS.map(t => keyRow(t, known.has(t) ? MASKED.find(m => m.provider === t).masked : null)).join('')
+      + '</section>'
+      + '<section><h2>How these are stored</h2>'
+      + '<div class="meta" style="line-height:1.7">Keys are written to '
+      + '<code>%APPDATA%\\OpenUsage\\settings.json</code> with owner-only permissions on Windows. '
+      + 'They are read only to call that tool\u2019s own API \u2014 OpenUsage never transmits them anywhere. '
+      + 'Existing keys are shown masked; saving an empty value clears one.</div></section>';
+    $('foot').textContent = MASKED.length + ' key(s) stored';
+    return;
+  }
+
+  if (TAB === 'share') {
+    $('scroll').innerHTML =
+      '<section><h2>Share card</h2>'
+      + '<div class="meta">A 1200x630 PNG of your headline numbers, generated locally from the same '
+      + 'scan the tray uses. Nothing is uploaded.</div>'
+      + '<div class="row-btns"><button class="tbtn primary" id="btnDl" onclick="downloadCard()">Download PNG</button>'
+      + '<button class="tbtn" onclick="copyCard()">Copy SVG</button></div>'
+      + '<div id="cardPreview"></div></section>';
+    $('foot').textContent = 'share';
+    return;
+  }
 
   if (TAB === 'settings') {
     const limits = series?.rateLimits || [];
@@ -257,12 +458,15 @@ async function render() {
   const max = Math.max(...models.map(m => m.costUsd ?? 0));
   const limits = series?.rateLimits || [];
   $('scroll').innerHTML =
-    '<div class="totals">'
-    + '<div class="tot"><b>' + fmtTok(r.totalTokens ?? r.total_tokens) + '</b><i>tokens</i></div>'
-    + '<div class="tot"><b>' + fmtUsd(r.totalCostUsd ?? r.total_cost_usd ?? 0) + '</b><i>est. spend</i></div>'
-    + '<div class="tot"><b>' + (r.totalRequests ?? r.total_requests ?? 0) + '</b><i>requests</i></div>'
-    + '</div>'
-    + '<section><h2>By model &middot; 30d</h2>' + models.map(m => {
+    (shown('totals') ? '<div class="totals">'
+      + '<div class="tot"><b>' + fmtTok(r.totalTokens ?? r.total_tokens) + '</b><i>tokens</i></div>'
+      + '<div class="tot"><b>' + fmtUsd(r.totalCostUsd ?? r.total_cost_usd ?? 0) + '</b><i>est. spend</i></div>'
+      + '<div class="tot"><b>' + (r.totalRequests ?? r.total_requests ?? 0) + '</b><i>requests</i></div>'
+      + '</div>' : '')
+    + (shown('sparkline') ? '<section><h2>Trend &middot; 30 days</h2>'
+      + ((series?.days || []).length > 1 ? sparkline(series.days, 'costUsd')
+         : '<div class="meta">Not enough history yet.</div>') + '</section>' : '')
+    + (shown('models') ? '<section><h2>By model &middot; 30d</h2>' + models.map(m => {
         const t = m.tokens, total = (t.input|0) + (t.output|0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0);
         return '<div class="model"><div class="row"><span class="name">' + m.model
           + '</span><span class="cost">' + fmtUsd(m.costUsd) + '</span></div>'
@@ -270,15 +474,21 @@ async function render() {
           + fmtTok(t.input) + ' / out ' + fmtTok(t.output) + ' / cache '
           + fmtTok((t.cacheRead ?? 0) + (t.cacheWrite ?? 0)) + '</div>'
           + '<div class="bar"><i style="width:' + Math.max(2, (m.costUsd/(max||1))*100) + '%"></i></div></div>';
-      }).join('') + '</section>'
-    + (limits.length ? '<section><h2>Rate limits</h2>' + limits.map(l =>
+      }).join('') + '</section>' : '')
+    + (shown('ratelimits') && limits.length ? '<section><h2>Rate limits</h2>' + limits.map(l =>
         '<div class="rl"><div class="row"><span class="name">' + l.name + '</span>' + rlPill(l.utilization)
         + '</div><div class="meta">' + resetsText(l.resetsInMinutes) + '</div></div>').join('') + '</section>' : '')
-    + '<section><h2>Accounts</h2><div class="roots">' + accountsSection(accounts) + '</div></section>'
-    + '<section><h2>Config roots scanned</h2><div class="roots">'
-    + (r.roots||[]).map(x => '<div>' + x + '</div>').join('') + '</div></section>';
+    + (shown('accounts') ? '<section><h2>Accounts</h2><div class="roots">' + accountsSection(accounts) + '</div></section>' : '')
+    + (shown('roots') ? '<section><h2>Config roots scanned</h2><div class="roots">'
+      + (r.roots||[]).map(x => '<div>' + x + '</div>').join('') + '</div></section>' : '');
 
   $('foot').textContent = (r.scannedFiles ?? r.scanned_files ?? 0) + ' files · last 30 days';
+}
+
+async function copyCard() {
+  const svgText = await window.__TAURI__.core.invoke('get_share_card');
+  try { await navigator.clipboard.writeText(svgText); alert('SVG copied to clipboard.'); }
+  catch (e) { alert('Clipboard blocked: ' + e); }
 }
 
 render();
