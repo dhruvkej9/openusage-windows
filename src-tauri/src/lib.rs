@@ -1,2 +1,3 @@
-// Library half so the scanner can be unit-tested without building the whole app.
+// Library half so the scanners can be unit-tested without building the whole app.
+pub mod accounts;
 pub mod claude;

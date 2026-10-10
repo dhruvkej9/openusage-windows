@@ -17,20 +17,22 @@ find — sums tokens per model, and prices them locally.
 scanner runs `wsl.exe -l -q` and reads every distro's home dirs, so a Windows tray app picks
 up WSL sessions with no configuration.
 
+## Install
+
+Download **`OpenUsage_0.1.0_x64-setup.exe`** from the [releases page](../../releases) and run it.
+It installs to `%LOCALAPPDATA%\OpenUsage`, adds a Start-menu shortcut, and can run at login.
+
+Portable users can take `openusage.exe` directly and run it from anywhere.
+
 ## Build
 
 ```sh
-# from this repo
 npm install
-npx tauri build --target x86_64-pc-windows-gnu   # needs llvm-rc + mingw-w64 on Linux
+npx tauri build --target x86_64-pc-windows-gnu
 ```
 
-Cross-compiling from Linux produces the `.exe`; the NSIS installer step needs a Windows host
-(`makensis.exe`), so on Linux take the binary directly:
-
-```
-src-tauri/target/x86_64-pc-windows-gnu/release/openusage.exe
-```
+On Linux this needs `llvm` (for `llvm-rc`), `mingw-w64`, and `nsis` — the installer builds fine
+cross-compiled, just unsigned.
 
 ## Tests
 
@@ -54,6 +56,28 @@ cd src-tauri && cargo test
 - **Only the Claude Code provider.** The other ten need their own credential and API paths;
   the scanner is a module, so each is an added file.
 - **No updater.** Upstream uses Sparkle; Windows builds would use WinGet or an in-app check.
+
+## Providers
+
+Claude Code is the only one that reports **token-level usage** (it reads
+`projects/**/*.jsonl`). The other detected tools report **account state and balances**, which is
+what they expose locally without a new credential flow:
+
+| Tool | Read from | Reports |
+|---|---|---|
+| Claude Code | `~/.claude.json`, `projects/**/*.jsonl` | tokens + spend per model, org cards |
+| OpenRouter | `~/.config/openrouter/key.json` | credits remaining (API) |
+| Z.ai (GLM) | `~/.config/zai/key.json` | account balance (API) |
+| GitHub Copilot | `~/.config/gh/hosts.yml` | authenticated + user |
+| OpenAI Codex | `~/.codex/sessions` | session groups |
+| Grok CLI | `~/.grok/auth.json` | account + plan |
+| Devin | `~/.local/share/devin/credentials.toml` | authenticated |
+| Pi agent | `~/.pi/agent/sessions` | session count |
+| Cursor | `%APPDATA%\Cursor` | installed + state db |
+| Ollama | `ollama list` | local model count (free) |
+
+Each root also gets checked under `%APPDATA%` / `%LOCALAPPDATA%` where Windows puts it, and
+inside every WSL distro's home — so a tool installed only in WSL is still found.
 
 ## Licence
 

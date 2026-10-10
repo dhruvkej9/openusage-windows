@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use openusage_lib::claude;
+use openusage_lib::{accounts, claude};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
@@ -8,6 +8,16 @@ use tauri::{AppHandle, Manager, WindowEvent};
 #[tauri::command]
 fn get_usage() -> claude::UsageReport {
     claude::scan()
+}
+
+#[tauri::command]
+fn get_accounts() -> Vec<accounts::AccountInfo> {
+    accounts::all_accounts()
+}
+
+#[tauri::command]
+fn get_claude_accounts() -> Vec<accounts::AccountInfo> {
+    accounts::claude_accounts()
 }
 
 #[tauri::command]
@@ -40,7 +50,7 @@ fn tooltip(report: &claude::UsageReport) -> String {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_usage, get_roots])
+        .invoke_handler(tauri::generate_handler![get_usage, get_roots, get_accounts, get_claude_accounts])
         .setup(|app| {
             let handle = app.handle().clone();
 

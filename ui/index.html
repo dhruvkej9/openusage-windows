@@ -84,6 +84,19 @@ const fmtTok = n => {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return String(n);
 };
+const accountsSection = list => {
+  if (!list.length) return '<div class="roots"><div>No other tools detected.</div></div>';
+  return list.map(a => {
+    const bal = a.balanceUsd != null ? fmtUsd(a.balanceUsd)
+             : a.limitUsd != null ? 'limit ' + fmtUsd(a.limitUsd) : '';
+    const meta = [a.provider, a.detail].filter(Boolean).join(' · ');
+    return `<div class="model">
+      <div class="row"><span class="name">${a.label}</span><span class="cost">${bal}</span></div>
+      <div class="meta">${meta}</div>
+    </div>`;
+  }).join('');
+};
+
 const fmtUsd = v => v >= 100 ? '$' + v.toFixed(0) : v >= 10 ? '$' + v.toFixed(2) : '$' + v.toFixed(3);
 
 async function render() {
@@ -91,6 +104,8 @@ async function render() {
   if (!invoke) { document.getElementById('body').innerHTML = '<div class="empty">Tauri runtime not available.</div>'; return; }
 
   const r = await invoke('get_usage');
+  let accounts = [];
+  try { accounts = await invoke('get_accounts') || []; } catch (e) { accounts = []; }
   const body = document.getElementById('body');
 
   if (!r.models || !r.models.length) {
@@ -121,6 +136,7 @@ async function render() {
       <div class="tot"><b>${r.totalRequests ?? r.total_requests ?? 0}</b><i>requests</i></div>
     </div>
     <section><h2>By model</h2>${models}</section>
+    <section><h2>Accounts &amp; balances</h2>${accountsSection(accounts)}</section>
     <section><h2>Config roots scanned</h2><div class="roots">${(r.roots||[]).map(x => `<div>${x}</div>`).join('') || '<div>none found</div>'}</div></section>`;
 
   document.getElementById('foot').textContent =
