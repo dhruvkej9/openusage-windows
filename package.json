@@ -1,0 +1,11 @@
+{
+  "name": "openusage-win",
+  "version": "0.1.0",
+  "description": "Windows tray tracker for Claude Code usage (WSL-aware)",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
