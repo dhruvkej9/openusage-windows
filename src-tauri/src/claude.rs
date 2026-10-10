@@ -47,6 +47,9 @@ pub struct ModelUsage {
 #[derive(Debug, Clone, Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageReport {
+    /// Absolute paths of the jsonl files that fed this report, so the series builder
+    /// walks the same set instead of re-discovering (and possibly diverging).
+    pub files: Vec<String>,
     /// Where the data came from, so a UI can show "WSL: Ubuntu".
     pub roots: Vec<String>,
     pub models: Vec<ModelUsage>,
@@ -227,6 +230,7 @@ pub fn scan() -> UsageReport {
                 continue;
             };
             report.scanned_files += 1;
+            report.files.push(file.to_string_lossy().into_owned());
 
             for line in text.lines() {
                 let Ok(entry) = serde_json::from_str::<RawEntry>(line) else {
@@ -316,4 +320,16 @@ mod tests {
         // An unrecognised model must not be priced at opus rates.
         assert_eq!(rates_for("some-new-model").input, rates_for("claude-sonnet-5").input);
     }
+}
+/// Every jsonl under every Claude root, for callers that need the raw files.
+pub fn all_usage_files() -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let max_age = Duration::from_secs(30 * 24 * 3600);
+    for (_label, root) in config_roots() {
+        let mut files = Vec::new();
+        jsonl_files(&root.join("projects"), &mut files, 0);
+        files.sort();
+        out.extend(files.into_iter().filter(|f| modified_within(f, max_age)));
+    }
+    out
 }
